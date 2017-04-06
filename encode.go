@@ -2,19 +2,10 @@ package csv
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 )
-
-func g() {
-	json.Marshal("greg")
-}
-
-func t() {
-	json.Unmarshal([]byte{}, "greg")
-}
 
 type CSVEncoder struct {
 	HeaderFields map[string][]string
@@ -27,10 +18,10 @@ func Marshal(v interface{}) ([]byte, error) {
 
 	if val.Kind() == reflect.Slice {
 		if val.Type().Elem().Kind() != reflect.Struct {
-			return nil, fmt.Errorf("csv error: NOTE expected a struct or a list of struct\n")
+			return nil, fmt.Errorf("csv error: expected a struct or a list of struct\n")
 		}
 	} else if val.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("csv error: NOTE 2 expected a struct or a list of struct\n")
+		return nil, fmt.Errorf("csv error: expected a struct or a list of struct\n")
 	}
 
 	encoder, err := NewCSVEncoder(val)
@@ -63,13 +54,13 @@ func NewCSVEncoder(v reflect.Value) (*CSVEncoder, error) {
 		Rows:         [][]byte{},
 	}
 
-	if err := exporter.SetHeader(v); err != nil {
+	if err := exporter.EncodeHeader(v); err != nil {
 		return nil, err
 	}
 	return exporter, nil
 }
 
-func (c *CSVEncoder) SetHeader(v reflect.Value) error {
+func (c *CSVEncoder) EncodeHeader(v reflect.Value) error {
 	if v.Kind() == reflect.Slice {
 		v = reflect.Zero(v.Type().Elem())
 	}
@@ -78,7 +69,7 @@ func (c *CSVEncoder) SetHeader(v reflect.Value) error {
 		return fmt.Errorf("csv error: expected a struct or a list of struct\n")
 	}
 	c.RowCache = []string{}
-	if err := c.setHeader(v, ""); err != nil {
+	if err := c.encodeHeader(v, ""); err != nil {
 		return err
 	}
 
@@ -86,7 +77,7 @@ func (c *CSVEncoder) SetHeader(v reflect.Value) error {
 	return nil
 }
 
-func (c *CSVEncoder) setHeader(strctVal reflect.Value, start string) error {
+func (c *CSVEncoder) encodeHeader(strctVal reflect.Value, start string) error {
 
 	strctTyp := strctVal.Type()
 
@@ -105,7 +96,7 @@ func (c *CSVEncoder) setHeader(strctVal reflect.Value, start string) error {
 		switch fld.Kind() {
 		case reflect.Struct:
 			c.HeaderFields[start] = append(c.HeaderFields[start], name)
-			if err := c.setHeader(reflect.Indirect(fld), start+tag+"."); err != nil {
+			if err := c.encodeHeader(reflect.Indirect(fld), start+tag+"."); err != nil {
 				return err
 			}
 		case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Bool:
@@ -118,7 +109,7 @@ func (c *CSVEncoder) setHeader(strctVal reflect.Value, start string) error {
 
 func (c *CSVEncoder) Encode(v reflect.Value) ([]byte, error) {
 	if v.Kind() == reflect.Struct {
-		if err := c.SetRow(v); err != nil {
+		if err := c.EncodeRow(v, ""); err != nil {
 			return nil, err
 		}
 		return bytes.Join(c.Rows, []byte("\n")), nil
@@ -127,25 +118,17 @@ func (c *CSVEncoder) Encode(v reflect.Value) ([]byte, error) {
 	for i := 0; i < v.Len(); i++ {
 
 		strctVal := v.Index(i)
-		if err := c.SetRow(strctVal); err != nil {
+		c.RowCache = []string{}
+		if err := c.EncodeRow(strctVal, ""); err != nil {
 			return nil, err
 		}
+		c.Rows = append(c.Rows, []byte(strings.Join(c.RowCache, ",")))
 	}
 
 	return bytes.Join(c.Rows, []byte("\n")), nil
 }
 
-func (c *CSVEncoder) SetRow(v reflect.Value) error {
-	c.RowCache = []string{}
-	if err := c.setRow(v, ""); err != nil {
-		return err
-	}
-
-	c.Rows = append(c.Rows, []byte(strings.Join(c.RowCache, ",")))
-	return nil
-}
-
-func (c *CSVEncoder) setRow(strctVal reflect.Value, start string) error {
+func (c *CSVEncoder) EncodeRow(strctVal reflect.Value, start string) error {
 	if strctVal.Kind() != reflect.Struct {
 		return fmt.Errorf("csv error: expected a struct or a list of struct\n")
 	}
@@ -163,7 +146,7 @@ func (c *CSVEncoder) setRow(strctVal reflect.Value, start string) error {
 
 		switch fld.Kind() {
 		case reflect.Struct:
-			if err := c.setRow(reflect.Indirect(fld), start+tag+"."); err != nil {
+			if err := c.EncodeRow(reflect.Indirect(fld), start+tag+"."); err != nil {
 				return err
 			}
 		case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Bool:

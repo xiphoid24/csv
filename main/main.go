@@ -9,38 +9,41 @@ import (
 
 func main() {
 
-	/*	users := []User{
-			{
-				Name:     "name-1",
-				Age:      1,
-				Active:   true,
-				Email:    "1@1.com",
-				Password: "1",
-				Address: Address{
-					Street:  "1 - street",
-					City:    "1 - city",
-					County:  "1 - county",
-					State:   "1 - state",
-					Zip:     "11111",
-					Country: "1 - country",
-				},
+	/*users := []User{
+		{
+			Name:     "name-1",
+			Age:      1,
+			Active:   true,
+			Email:    "1@1.com",
+			Password: "1",
+			Address: Address{
+				Street:  "1 - street",
+				City:    "1 - city",
+				County:  "1 - county",
+				State:   "1 - state",
+				Zip:     "11111",
+				Country: "1 - country",
 			},
-		}
+		},
+	}
 
-		b, err := csv.Marshal(users)
+	b, err := csv.Marshal(users)
+	if err != nil {
+		panic(err)
+	}
 
-		if err != nil {
-			panic(err)
-		}
+	if err := ioutil.WriteFile("users.csv", b, 0666); err != nil {
+		panic(err)
+	}*/
 
-		fmt.Printf("\n\n%s\n\n", b)
-
-		var u []User
-		if err := csv.Unmarshal(b, &u); err != nil {
-			panic(err)
-		}
-
-		fmt.Printf("%+v\n\n", u)*/
+	// fmt.Printf("\n\n%s\n\n", b)
+	//
+	// var u []User
+	// if err := csv.Unmarshal(b, &u); err != nil {
+	// 	panic(err)
+	// }
+	//
+	// fmt.Printf("%+v\n\n", u)
 
 	b, err := ioutil.ReadFile("drivers.csv")
 	if err != nil {

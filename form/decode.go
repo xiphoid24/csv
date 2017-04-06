@@ -1,4 +1,4 @@
-package csv
+package form
 
 import (
 	"bytes"
@@ -33,15 +33,20 @@ func (e *InvalidUnmarshalError) Error() string {
 
 var EMPTYROW = errors.New("CSV EMPTY ROW")
 
-type CSVDecoder struct {
-	Rdr       *csv.Reader
-	Rows      [][]string
-	HeaderMap map[string]int
-	RowFilled bool
+type CSVRelationDecoder struct {
+	Rdr         *csv.Reader
+	Rows        [][]string
+	HeaderMap   map[string]int
+	RelationMap map[string][]string
+	RowFilled   bool
 }
 
-func NewCSVDecoder(b []byte) (*CSVDecoder, error) {
-	c := new(CSVDecoder)
+func NewCSVRelationDecoder(b []byte, rel map[string][]string) (*CSVRelationDecoder, error) {
+	if rel == nil {
+		return nil, fmt.Errorf("csv: nil relationship map")
+	}
+
+	c := new(CSVRelationDecoder)
 	c.Rdr = csv.NewReader(bytes.NewBuffer(b))
 	for {
 		row, err := c.Rdr.Read()
@@ -62,10 +67,12 @@ func NewCSVDecoder(b []byte) (*CSVDecoder, error) {
 	for i, h := range c.Rows[0] {
 		c.HeaderMap[h] = i
 	}
+
+	c.RelationMap = rel
 	return c, nil
 }
 
-func Unmarshal(b []byte, v interface{}) error {
+func Unmarshal(b []byte, v interface{}, rel map[string][]string) error {
 
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
@@ -81,7 +88,7 @@ func Unmarshal(b []byte, v interface{}) error {
 		return &InvalidUnmarshalError{reflect.TypeOf(v)}
 	}
 
-	decoder, err := NewCSVDecoder(b)
+	decoder, err := NewCSVRelationDecoder(b, rel)
 	if err != nil {
 		return err
 	}
@@ -92,7 +99,7 @@ func Unmarshal(b []byte, v interface{}) error {
 	return nil
 }
 
-func UnmarshalRow(row int, b []byte, v interface{}) error {
+func UnmarshalRow(row int, b []byte, v interface{}, rel map[string][]string) error {
 
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
@@ -104,7 +111,7 @@ func UnmarshalRow(row int, b []byte, v interface{}) error {
 		return &InvalidUnmarshalError{reflect.TypeOf(v)}
 	}
 
-	decoder, err := NewCSVDecoder(b)
+	decoder, err := NewCSVRelationDecoder(b, rel)
 	if err != nil {
 		return err
 	}
@@ -113,14 +120,14 @@ func UnmarshalRow(row int, b []byte, v interface{}) error {
 		return fmt.Errorf("csv: Invalid row")
 	}
 
-	if err := decoder.DecodeRow(row, "", rv.Elem()); err != nil {
+	if err := decoder.DecodeRelationRow(row, rv.Elem()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *CSVDecoder) GetFieldInRow(r, f int) string {
+func (c *CSVRelationDecoder) GetFieldInRow(r, f int) string {
 	if len(c.Rows) < r {
 		return ""
 	}
@@ -130,7 +137,7 @@ func (c *CSVDecoder) GetFieldInRow(r, f int) string {
 	return c.Rows[r][f]
 }
 
-func (c *CSVDecoder) Decode(ptr interface{}) error {
+func (c *CSVRelationDecoder) Decode(ptr interface{}) error {
 	if len(c.Rows) < 2 {
 		return errors.New("csv: not enough rows in csv file")
 	}
@@ -144,7 +151,7 @@ func (c *CSVDecoder) Decode(ptr interface{}) error {
 	for rowNum := 1; rowNum < len(c.Rows); rowNum++ {
 		c.RowFilled = false
 		strct := reflect.Indirect(reflect.New(strctTyp))
-		if err := c.DecodeRow(rowNum, "", strct); err != nil {
+		if err := c.DecodeRelationRow(rowNum, strct); err != nil {
 			return err
 		}
 
@@ -155,33 +162,37 @@ func (c *CSVDecoder) Decode(ptr interface{}) error {
 	return nil
 }
 
-func (c *CSVDecoder) DecodeRow(rowNum int, start string, strct reflect.Value) error {
+func (c *CSVRelationDecoder) DecodeRelationRow(rowNum int, strct reflect.Value) error {
+	strctTyp := strct.Type()
 
 	for fieldNum := 0; fieldNum < strct.NumField(); fieldNum++ {
 
-		strctTyp := strct.Type()
 		fld := strct.Field(fieldNum)
 		name := strctTyp.Field(fieldNum).Name
 
-		tag := strctTyp.Field(fieldNum).Tag.Get("csv")
-		if tag == "-" {
+		formtag, ok := strctTyp.Field(fieldNum).Tag.Lookup("csvform")
+		if !ok {
 			continue
 		}
 
-		if tag == "" {
-			tag = name
+		if formtag == "" {
+			formtag = name
 		}
 
 		if fld.Kind() == reflect.Struct {
 			st := reflect.Indirect(fld)
-			if err := c.DecodeRow(rowNum, start+tag+".", st); err != nil {
+			if err := c.DecodeRelationRow(rowNum, st); err != nil {
 				return err
 			}
 			fld.Set(st)
 			continue
 		}
 
-		columnNum, ok := c.HeaderMap[start+tag]
+		columnName, ok := getColumnName(formtag, c.RelationMap)
+		if !ok {
+			continue
+		}
+		columnNum, ok := c.HeaderMap[columnName]
 		if !ok {
 			continue
 		}
