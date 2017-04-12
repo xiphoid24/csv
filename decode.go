@@ -120,6 +120,13 @@ func UnmarshalRow(row int, b []byte, v interface{}) error {
 	return nil
 }
 
+func (c *CSVDecoder) GetHeader() []string {
+	if len(c.Rows) > 1 {
+		return c.Rows[0]
+	}
+	return nil
+}
+
 func (c *CSVDecoder) GetFieldInRow(r, f int) string {
 	if len(c.Rows) < r {
 		return ""

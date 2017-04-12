@@ -120,7 +120,7 @@ func UnmarshalRow(row int, b []byte, v interface{}, rel map[string][]string) err
 		return fmt.Errorf("csv: Invalid row")
 	}
 
-	if err := decoder.DecodeRelationRow(row, rv.Elem()); err != nil {
+	if err := decoder.DecodeRelationRow(row, rv.Elem(), ""); err != nil {
 		return err
 	}
 
@@ -151,7 +151,7 @@ func (c *CSVRelationDecoder) Decode(ptr interface{}) error {
 	for rowNum := 1; rowNum < len(c.Rows); rowNum++ {
 		c.RowFilled = false
 		strct := reflect.Indirect(reflect.New(strctTyp))
-		if err := c.DecodeRelationRow(rowNum, strct); err != nil {
+		if err := c.DecodeRelationRow(rowNum, strct, ""); err != nil {
 			return err
 		}
 
@@ -162,8 +162,12 @@ func (c *CSVRelationDecoder) Decode(ptr interface{}) error {
 	return nil
 }
 
-func (c *CSVRelationDecoder) DecodeRelationRow(rowNum int, strct reflect.Value) error {
+func (c *CSVRelationDecoder) DecodeRelationRow(rowNum int, strct reflect.Value, start string) error {
 	strctTyp := strct.Type()
+
+	if start != "" {
+		start += " "
+	}
 
 	for fieldNum := 0; fieldNum < strct.NumField(); fieldNum++ {
 
@@ -179,16 +183,19 @@ func (c *CSVRelationDecoder) DecodeRelationRow(rowNum int, strct reflect.Value) 
 			formtag = name
 		}
 
+		if formtag == "-" {
+			formtag = ""
+		}
+
 		if fld.Kind() == reflect.Struct {
 			st := reflect.Indirect(fld)
-			if err := c.DecodeRelationRow(rowNum, st); err != nil {
+			if err := c.DecodeRelationRow(rowNum, st, start+formtag); err != nil {
 				return err
 			}
 			fld.Set(st)
 			continue
 		}
-
-		columnName, ok := getColumnName(formtag, c.RelationMap)
+		columnName, ok := getColumnName(start+formtag, c.RelationMap)
 		if !ok {
 			continue
 		}

@@ -20,9 +20,12 @@ func getOptions(strctVal reflect.Value, s *[]string, start string) error {
 
 	strctTyp := strctVal.Type()
 
+	if start != "" {
+		start += " "
+	}
+
 	for fieldNum := 0; fieldNum < strctVal.NumField(); fieldNum++ {
 		tag, ok := strctTyp.Field(fieldNum).Tag.Lookup("csvform")
-		fmt.Println(tag)
 		if !ok {
 			continue
 		}
@@ -34,13 +37,17 @@ func getOptions(strctVal reflect.Value, s *[]string, start string) error {
 			tag = name
 		}
 
+		if tag == "-" {
+			tag = ""
+		}
+
 		switch fld.Kind() {
 		case reflect.Struct:
-			if err := getOptions(reflect.Indirect(fld), s, tag); err != nil {
+			if err := getOptions(reflect.Indirect(fld), s, start+tag); err != nil {
 				return err
 			}
 		case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Bool:
-			(*s) = append((*s), tag)
+			(*s) = append((*s), start+tag)
 		}
 	}
 
